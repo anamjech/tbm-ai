@@ -185,7 +185,7 @@ if submitted:
             try:
                 genai.configure(api_key=active_key)
                 # 수정된 부분: 올바른 Gemini 모델명 문자열 지정
-                model = genai.GenerativeModel('gemini-1.5-flash')
+                model = genai.GenerativeModel('Gemini 3.5 Flash Lite')
 
                 prompt = f"""
                 너는 베테랑 건설/제조업 안전관리 전문가야. 다음 작업 내용에 대해 산업안전보건기준에 맞추어 위험성평가를 수행해줘.
