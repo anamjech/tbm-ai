@@ -76,12 +76,13 @@ st.markdown('<div class="sub-desc">작업 내용을 입력하면 AI가 위험성
 with st.sidebar:
     st.header("⚙️ 시스템 설정")
     
-    if "api_key" not in st.session_state:
-        st.session_state.api_key = ""
-        
-    user_api_key = st.text_input("Gemini API Key 입력", type="password", value=st.session_state.api_key, help="AI 위험성평가 생성을 위해 필요합니다.")
-    if user_api_key:
-        st.session_state.api_key = user_api_key
+    # 여기서 st.secrets로 키를 자동으로 불러옵니다
+    try:
+        active_key = st.secrets["GEMINI_API_KEY"]
+        st.success("🔒 사내 테스트용 API 키 자동 적용됨")
+    except:
+        active_key = ""
+        st.error("⚠️ Streamlit Secrets 설정이 안 되어 있습니다!")
 
     st.markdown("---")
     st.info(f"📬 **메일 자동 수신처**\n\n모든 TBM 보고서는 아래 주소로 자동 발송됩니다:\n`{FIXED_RECEIVER_EMAIL}`")
@@ -172,9 +173,8 @@ submitted = st.button("🚀 TBM 위험성평가 생성 및 메일 자동 발송"
 
 # --- 4. 제출 처리 로직 ---
 if submitted:
-    active_key = st.session_state.get("api_key", "")
     if not active_key:
-        st.error("⚠️ 사이드바에 Gemini API Key를 입력해주세요!")
+        st.error("⚠️ 스트림릿 Secrets에 Gemini API Key가 설정되지 않았습니다!")
     elif not site_name:
         st.error("⚠️ 현장명을 입력해주세요!")
     elif not work_content:
