@@ -379,7 +379,17 @@ if submitted:
                 part = MIMEBase('application', 'octet-stream')
                 part.set_payload(pdf_data)
                 encoders.encode_base64(part)
-                part.add_header('Content-Disposition', f'attachment; filename=TBM_{site_name}_{tbm_date}.pdf')
+                from email.header import Header
+
+part = MIMEBase('application', 'octet-stream')
+part.set_payload(pdf_data)
+encoders.encode_base64(part)
+
+# 한글과 띄어쓰기가 포함된 파일명을 UTF-8로 안전하게 인코딩
+filename_val = f"TBM_{site_name}_{tbm_date}.pdf"
+encoded_filename = Header(filename_val, 'utf-8').encode()
+part.add_header('Content-Disposition', 'attachment', filename=encoded_filename)
+msg.attach(part)
                 msg.attach(part)
 
                 server = smtplib.SMTP_SSL(FIXED_SMTP_SERVER, FIXED_SMTP_PORT, timeout=10)
