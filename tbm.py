@@ -21,19 +21,19 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.graphics.shapes import Drawing, Circle, String
 
 # ==========================================
-# 🛠️ [고정 설정] 발송 및 수신 메일 계정 설정
+# 🛠️ [고정 설정] 발송 및 수신 메일 계정 설정 (Gmail 적용 완료)
 # ==========================================
-FIXED_SMTP_SERVER = "smtp.daum.net"
+FIXED_SMTP_SERVER = "smtp.gmail.com"
 FIXED_SMTP_PORT = 465
-FIXED_SENDER_EMAIL = "your_daum_id@daum.net"        # 👈 본인의 다음(Daum) 메일 주소로 변경하세요
-FIXED_SENDER_PASSWORD = "your_daum_password"    # 👈 다음 메일 비밀번호 (또는 앱 비밀번호)
-FIXED_RECEIVER_EMAIL = "safety@company.com"     # 👈 보고서를 받을 안전관리자 메일 주소
+FIXED_SENDER_EMAIL = "jechanam@gmail.com"        
+FIXED_SENDER_PASSWORD = "emhvjdvudtlcddeq"    
+FIXED_RECEIVER_EMAIL = "safety@company.com"     # 👈 보고서를 받을 실제 메일 주소로 나중에 변경하세요!
 
 # --- 0. 한글 폰트 강제 등록 (리눅스 서버 / 윈도우 환경 자동 분기) ---
 try:
     linux_font_path = '/usr/share/fonts/truetype/nanum/NanumGothic.ttf'
     windows_font_path = 'C:/Windows/Fonts/malgun.ttf'
-    
+
     if os.path.exists(linux_font_path):
         pdfmetrics.registerFont(TTFont('NanumGothic', linux_font_path))
         KOREAN_FONT = 'NanumGothic'
@@ -75,8 +75,8 @@ st.markdown('<div class="sub-desc">작업 내용을 입력하면 AI가 위험성
 # --- 2. 사이드바 (설정) ---
 with st.sidebar:
     st.header("⚙️ 시스템 설정")
-    
-    # 여기서 st.secrets로 키를 자동으로 불러옵니다
+
+    # 여기서 st.secrets로 API 키를 자동으로 불러옵니다
     try:
         active_key = st.secrets["GEMINI_API_KEY"]
         st.success("🔒 사내 테스트용 API 키 자동 적용됨")
@@ -124,7 +124,7 @@ auto_weather = ""
 if loc_data and loc_data.get('latitude') and loc_data.get('longitude'):
     lat = loc_data.get('latitude')
     lon = loc_data.get('longitude')
-    
+
     # 1. 위경도를 한국어 주소로 변환 (OpenStreetMap Nominatim 무료 API)
     try:
         geo_url = f"https://nominatim.openstreetmap.org/reverse?format=json&lat={lat}&lon={lon}&zoom=18&addressdetails=1"
@@ -133,7 +133,6 @@ if loc_data and loc_data.get('latitude') and loc_data.get('longitude'):
         address = res.get('display_name', '')
         if address:
             parts = address.split(', ')
-            # 한국 주소 체계 역순 조합 (예: 서울특별시 중구 세종대로 ...)
             if len(parts) >= 4:
                 auto_location = f"{parts[-3]} {parts[-4]} {parts[-5]}" if len(parts)>=5 else address
             else:
@@ -152,13 +151,12 @@ if loc_data and loc_data.get('latitude') and loc_data.get('longitude'):
     except:
         auto_weather = "기온 20°C (야외 작업 양호)"
 
-# 위치 및 날씨 입력 필드 (자동 세팅되되, 필요하면 직접 수정도 가능)
 location = st.text_input("📍 작업 위치", value=auto_location, placeholder="예: (위 버튼을 누르면 자동 입력됨)")
 weather_info = st.text_input("⛅ 현장 날씨", value=auto_weather, placeholder="예: 기온 22°C (GPS 연동 시 자동 입력됨)")
 
 work_content = st.text_area("🔧 작업 내용 입력", placeholder="예: 엘리베이터 기계실 부품 양중", height=100)
 
-# --- 사진 첨부 방식 선택 (카메라 직접 촬영 또는 앨범 파일 선택) ---
+# --- 사진 첨부 방식 선택 ---
 st.markdown("---")
 st.markdown("📸 **현장 활동 사진 첨부**")
 upload_mode = st.radio("첨부 방식을 선택하세요:", ["📁 파일 / 앨범에서 선택", "📷 카메라로 직접 촬영"], horizontal=True)
@@ -184,11 +182,11 @@ if submitted:
             try:
                 genai.configure(api_key=active_key)
                 model = genai.GenerativeModel('gemini-3.6-flash')
-                
+
                 prompt = f"""
                 너는 베테랑 건설/제조업 안전관리 전문가야. 다음 작업 내용에 대해 산업안전보건기준에 맞추어 위험성평가를 수행해줘.
                 작업 내용: {work_content}
-                
+
                 반드시 정확히 3개의 위험요인을 도출하고, 오직 마크다운 표(Table) 형태로만 출력해줘. 다른 인사말이나 설명은 절대 적지 마.
                 표의 헤더는 정확히 이 순서로 해줘:
                 | 번호 | 위험요인 | 잠재 위험성 (재해형태) | 감소 대책 (안전조치) |
@@ -204,14 +202,14 @@ if submitted:
         # --- 5. 웹 화면 실시간 결과 미리보기 ---
         st.markdown("---")
         st.subheader("📊 [실시간 화면 미리보기] AI 위험성평가 결과")
-        
+
         web_table_rows = []
         for line in ai_result_text.split('\n'):
             if '|' in line and '---' not in line:
                 cols = [c.replace('**', '').strip() for c in line.split('|')[1:-1]]
                 if len(cols) >= 4:
                     web_table_rows.append(cols)
-        
+
         if len(web_table_rows) > 0:
             st.table(web_table_rows[1:])
         else:
@@ -219,14 +217,14 @@ if submitted:
 
         # --- 6. PDF 서류 자동 생성 로직 ---
         st.info("📄 공식 TBM 문서 정밀 생성 및 작업자 도장 날인 중입니다...")
-        
+
         pdf_buffer = BytesIO()
         doc = SimpleDocTemplate(pdf_buffer, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
         story = []
 
         style_normal = ParagraphStyle('NormalKorean', fontName=KOREAN_FONT, fontSize=9, leading=14, textColor=colors.HexColor("#334155"))
         style_header = ParagraphStyle('HeaderKorean', fontName=KOREAN_FONT, fontSize=9, leading=14, textColor=colors.white)
-        
+
         title_style = ParagraphStyle(
             'TitleStyle', fontName=KOREAN_FONT, fontSize=16, alignment=1, textColor=colors.HexColor("#1E3A8A"), spaceAfter=15
         )
@@ -261,7 +259,7 @@ if submitted:
         worker_table_rows = [
             [Paragraph("<b>번호</b>", style_header), Paragraph("<b>작업자 성명</b>", style_header), Paragraph("<b>서명 (인)</b>", style_header)]
         ]
-        
+
         for idx, wname in enumerate(worker_names):
             stamp = create_name_stamp(wname)
             worker_table_rows.append([
@@ -282,7 +280,7 @@ if submitted:
         story.append(Spacer(1, 10))
 
         story.append(Paragraph("[AI 안전관리 전문가 분석] 위험성평가 결과", h2_style))
-        
+
         table_rows = []
         table_rows.append([
             Paragraph("<b>번호</b>", style_header),
@@ -325,7 +323,7 @@ if submitted:
                 temp_img_path = "temp_uploaded_img.png"
                 with open(temp_img_path, "wb") as f:
                     f.write(uploaded_file.getbuffer())
-                
+
                 img = RLImage(temp_img_path, width=220, height=140)
                 story.append(img)
             except Exception as img_err:
@@ -333,7 +331,7 @@ if submitted:
 
         doc.build(story)
         pdf_data = pdf_buffer.getvalue()
-        
+
         st.download_button(
             label="📥 TBM 평가서 PDF 다운로드",
             data=pdf_data,
@@ -341,46 +339,43 @@ if submitted:
             mime="application/pdf"
         )
 
-        # --- 7. Daum 메일 서버를 통한 자동 이메일 발송 로직 ---
-        with st.spinner("📧 Daum 메일 서버를 통해 안전관리자에게 문서를 전송 중입니다..."):
+        # --- 7. Gmail 서버를 통한 자동 이메일 발송 로직 ---
+        with st.spinner("📧 Gmail 서버를 통해 안전관리자에게 문서를 전송 중입니다..."):
             try:
-                if "your_daum_id" in FIXED_SENDER_EMAIL:
-                    st.warning("⚠️ 메일 발송 설정(아이디/비밀번호)이 예시 값(`your_daum_id`)으로 되어 있어 메일 발송을 건너뜁니다. (AI 분석과 PDF 다운로드는 정상 작동합니다!)")
-                else:
-                    msg = MIMEMultipart()
-                    msg['From'] = FIXED_SENDER_EMAIL
-                    msg['To'] = FIXED_RECEIVER_EMAIL
-                    msg['Subject'] = f"[TBM 보고서] [{site_name}] {tbm_date} 위험성평가 결과"
+                msg = MIMEMultipart()
+                msg['From'] = FIXED_SENDER_EMAIL
+                msg['To'] = FIXED_RECEIVER_EMAIL
+                msg['Subject'] = f"[TBM 보고서] [{site_name}] {tbm_date} 위험성평가 결과"
 
-                    body = f"""
-                    안녕하세요, 안전관리 담당자님.
-                    
-                    [{site_name}] 현장의 {tbm_date} TBM 및 위험성평가 보고서가 자동 접수되었습니다.
-                    
-                    - 현장명: {site_name}
-                    - 작업 일자: {tbm_date}
-                    - 작업 위치: {location}
-                    - 현장 날씨: {weather_info}
-                    - 참여 인원: {worker_count}명 ({', '.join(worker_names)})
-                    - 작업 내용: {work_content}
-                    
-                    첨부된 PDF 파일을 확인해 주시기 바랍니다.
-                    
-                    - 스마트 TBM 자동화 시스템 -
-                    """
-                    msg.attach(MIMEText(body, 'plain'))
+                body = f"""
+                안녕하세요, 안전관리 담당자님.
 
-                    part = MIMEBase('application', 'octet-stream')
-                    part.set_payload(pdf_data)
-                    encoders.encode_base64(part)
-                    part.add_header('Content-Disposition', f'attachment; filename=TBM_Report_{tbm_date}.pdf')
-                    msg.attach(part)
+                [{site_name}] 현장의 {tbm_date} TBM 및 위험성평가 보고서가 자동 접수되었습니다.
 
-                    server = smtplib.SMTP_SSL(FIXED_SMTP_SERVER, FIXED_SMTP_PORT, timeout=10)
-                    server.login(FIXED_SENDER_EMAIL, FIXED_SENDER_PASSWORD)
-                    server.sendmail(FIXED_SENDER_EMAIL, FIXED_RECEIVER_EMAIL, msg.as_string())
-                    server.quit()
+                - 현장명: {site_name}
+                - 작업 일자: {tbm_date}
+                - 작업 위치: {location}
+                - 현장 날씨: {weather_info}
+                - 참여 인원: {worker_count}명 ({', '.join(worker_names)})
+                - 작업 내용: {work_content}
 
-                    st.success(f"🎉 메일 발송 성공! 지정된 관리자 메일함({FIXED_RECEIVER_EMAIL})으로 안전하게 전송되었습니다.")
+                첨부된 PDF 파일을 확인해 주시기 바랍니다.
+
+                - 스마트 TBM 자동화 시스템 -
+                """
+                msg.attach(MIMEText(body, 'plain'))
+
+                part = MIMEBase('application', 'octet-stream')
+                part.set_payload(pdf_data)
+                encoders.encode_base64(part)
+                part.add_header('Content-Disposition', f'attachment; filename=TBM_Report_{tbm_date}.pdf')
+                msg.attach(part)
+
+                server = smtplib.SMTP_SSL(FIXED_SMTP_SERVER, FIXED_SMTP_PORT, timeout=10)
+                server.login(FIXED_SENDER_EMAIL, FIXED_SENDER_PASSWORD)
+                server.sendmail(FIXED_SENDER_EMAIL, FIXED_RECEIVER_EMAIL, msg.as_string())
+                server.quit()
+
+                st.success(f"🎉 메일 발송 성공! 지정된 관리자 메일함({FIXED_RECEIVER_EMAIL})으로 안전하게 전송되었습니다.")
             except Exception as mail_err:
                 st.error(f"❌ 메일 발송 실패 (네트워크 또는 계정 설정 확인): {mail_err}")
