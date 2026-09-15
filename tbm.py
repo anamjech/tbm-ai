@@ -5,6 +5,7 @@ import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
+from email.header import Header
 from email import encoders
 from io import BytesIO
 import requests
@@ -184,7 +185,6 @@ if submitted:
         with st.spinner("🤖 AI가 현장 작업 내용을 분석하여 위험성평가를 작성 중입니다..."):
             try:
                 genai.configure(api_key=active_key)
-                # 수정된 부분: 올바른 Gemini 모델명 문자열 지정
                 model = genai.GenerativeModel('gemini-3.5-flash-lite')
 
                 prompt = f"""
@@ -379,7 +379,12 @@ if submitted:
                 part = MIMEBase('application', 'octet-stream')
                 part.set_payload(pdf_data)
                 encoders.encode_base64(part)
-                part.add_header('Content-Disposition', f'attachment; filename=TBM_{site_name}_{tbm_date}.pdf')
+                
+                # 💡 한글/띄어쓰기 파일명이 깨지지 않도록 UTF-8 인코딩 적용
+                filename_val = f"TBM_{site_name}_{tbm_date}.pdf"
+                encoded_filename = Header(filename_val, 'utf-8').encode()
+                part.add_header('Content-Disposition', 'attachment', filename=encoded_filename)
+                
                 msg.attach(part)
 
                 server = smtplib.SMTP_SSL(FIXED_SMTP_SERVER, FIXED_SMTP_PORT, timeout=10)
