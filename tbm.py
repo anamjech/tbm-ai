@@ -379,7 +379,7 @@ if submitted:
                 part = MIMEBase('application', 'octet-stream')
                 part.set_payload(pdf_data)
                 encoders.encode_base64(part)
-                part.add_header('Content-Disposition', f'attachment; filename=TBM_Report_{tbm_date}.pdf')
+                part.add_header('Content-Disposition', f'attachment; filename=TBM_{site_name}_{tbm_date}.pdf')
                 msg.attach(part)
 
                 server = smtplib.SMTP_SSL(FIXED_SMTP_SERVER, FIXED_SMTP_PORT, timeout=10)
