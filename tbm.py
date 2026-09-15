@@ -27,7 +27,7 @@ FIXED_SMTP_SERVER = "smtp.gmail.com"
 FIXED_SMTP_PORT = 465
 FIXED_SENDER_EMAIL = "jechanam@gmail.com"        
 FIXED_SENDER_PASSWORD = "emhvjdvudtlcddeq"    
-FIXED_RECEIVER_EMAIL = "safety@company.com"     # 👈 보고서를 받을 실제 메일 주소로 나중에 변경하세요!
+FIXED_RECEIVER_EMAIL = "jech@anamt.co.kr"     # 👈 보고서를 받을 실제 메일 주소로 나중에 변경하세요!
 
 # --- 0. 한글 폰트 강제 등록 (리눅스 서버 / 윈도우 환경 자동 분기) ---
 try:
