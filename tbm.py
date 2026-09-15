@@ -24,19 +24,26 @@ from reportlab.graphics.shapes import Drawing, Circle, String
 # ==========================================
 FIXED_SMTP_SERVER = "smtp.daum.net"
 FIXED_SMTP_PORT = 465
-FIXED_SENDER_EMAIL = "your_daum_id@daum.net"       # 👈 발송할 본인의 다음(Daum) 메일 주소
-FIXED_SENDER_PASSWORD = "your_daum_password"   # 👈 다음 메일 비밀번호 (또는 앱 비밀번호)
-FIXED_RECEIVER_EMAIL = "safety@company.com"    # 👈 보고서를 받을 안전관리자(또는 대표님) 메일 주소
+FIXED_SENDER_EMAIL = "your_daum_id@daum.net"        # 👈 발송할 본인의 다음(Daum) 메일 주소
+FIXED_SENDER_PASSWORD = "your_daum_password"    # 👈 다음 메일 비밀번호 (또는 앱 비밀번호)
+FIXED_RECEIVER_EMAIL = "safety@company.com"     # 👈 보고서를 받을 안전관리자(또는 대표님) 메일 주소
 
-# --- 0. 한글 폰트 강제 등록 (글자 깨짐 방지) ---
+# --- 0. 한글 폰트 강제 등록 (리눅스 서버 / 윈도우 환경 자동 분기) ---
 try:
-    font_path = "C:/Windows/Fonts/malgun.ttf"
-    if os.path.exists(font_path):
-        pdfmetrics.registerFont(TTFont('Malgun', font_path))
+    linux_font_path = '/usr/share/fonts/truetype/nanum/NanumGothic.ttf'
+    windows_font_path = 'C:/Windows/Fonts/malgun.ttf'
+    
+    if os.path.exists(linux_font_path):
+        # 스트림릿 클라우드 (리눅스 서버) 환경
+        pdfmetrics.registerFont(TTFont('NanumGothic', linux_font_path))
+        KOREAN_FONT = 'NanumGothic'
+    elif os.path.exists(windows_font_path):
+        # 내 데스크톱 (윈도우) 환경
+        pdfmetrics.registerFont(TTFont('Malgun', windows_font_path))
         KOREAN_FONT = 'Malgun'
     else:
         KOREAN_FONT = 'Helvetica'
-except:
+except Exception:
     KOREAN_FONT = 'Helvetica'
 
 def clean_text_for_pdf(text):
@@ -152,7 +159,7 @@ if submitted:
         with st.spinner("🤖 AI가 현장 작업 내용을 분석하여 위험성평가를 작성 중입니다..."):
             try:
                 genai.configure(api_key=active_key)
-                model = genai.GenerativeModel('gemini-3.6-flash')
+                model = genai.GenerativeModel('gemini-1.5-flash')
                 
                 prompt = f"""
                 너는 베테랑 건설/제조업 안전관리 전문가야. 다음 작업 내용에 대해 산업안전보건기준에 맞추어 위험성평가를 수행해줘.
@@ -239,7 +246,7 @@ if submitted:
                 stamp
             ])
 
-        worker_table = Table(worker_table_rows, colWidths=[50, 250, 234], rowHeights=28) # 행 높이 컴팩트하게 설정
+        worker_table = Table(worker_table_rows, colWidths=[50, 250, 234], rowHeights=28)
         worker_table.setStyle(TableStyle([
             ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#1E3A8A")),
             ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#CBD5E1")),
