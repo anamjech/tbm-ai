@@ -10,6 +10,7 @@ from io import BytesIO
 import requests
 import google.generativeai as genai
 from streamlit_geolocation import streamlit_geolocation
+from PIL import Image as PilImage
 
 # ReportLab PDF 생성용 라이브러리
 from reportlab.lib.pagesizes import A4
@@ -21,15 +22,15 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.graphics.shapes import Drawing, Circle, String
 
 # ==========================================
-# 🛠️ [고정 설정] 발송 및 수신 메일 계정 설정 (Gmail 적용 완료)
+# 🛠️ [고정 설정] 발송 및 수신 메일 계정 설정
 # ==========================================
 FIXED_SMTP_SERVER = "smtp.gmail.com"
 FIXED_SMTP_PORT = 465
 FIXED_SENDER_EMAIL = "jechanam@gmail.com"        
 FIXED_SENDER_PASSWORD = "emhvjdvudtlcddeq"    
-FIXED_RECEIVER_EMAIL = "jech@anamt.co.kr"     # 👈 보고서를 받을 실제 메일 주소로 나중에 변경하세요!
+FIXED_RECEIVER_EMAIL = "safety@company.com"     # 👈 필요시 받을 메일 주소로 변경하세요!
 
-# --- 0. 한글 폰트 강제 등록 (리눅스 서버 / 윈도우 환경 자동 분기) ---
+# --- 0. 한글 폰트 강제 등록 ---
 try:
     linux_font_path = '/usr/share/fonts/truetype/nanum/NanumGothic.ttf'
     windows_font_path = 'C:/Windows/Fonts/malgun.ttf'
@@ -76,7 +77,6 @@ st.markdown('<div class="sub-desc">작업 내용을 입력하면 AI가 위험성
 with st.sidebar:
     st.header("⚙️ 시스템 설정")
 
-    # 여기서 st.secrets로 API 키를 자동으로 불러옵니다
     try:
         active_key = st.secrets["GEMINI_API_KEY"]
         st.success("🔒 사내 테스트용 API 키 자동 적용됨")
@@ -99,23 +99,24 @@ with col2:
     worker_count = st.number_input("참여 인원 (명)", min_value=1, max_value=15, value=3)
 
 st.markdown("---")
-st.markdown("👥 **참여 작업자 성명 입력** (빈칸에 이름을 바로 입력하세요)")
+st.markdown("👥 **참여 작업자 성명 입력**")
 
 worker_names = []
-cols_input = st.columns(min(int(worker_count), 3))
-for i in range(int(worker_count)):
-    col_idx = i % 3
-    with cols_input[col_idx]:
-        w_name = st.text_input(f"작업자 {i+1} 성명", value="", placeholder=f"작업자 {i+1} 이름", key=f"worker_name_{i}")
-        if not w_name.strip():
-            w_name = f"작업자{i+1}"
-        worker_names.append(w_name)
+num_workers = int(worker_count)
+
+for row_start in range(0, num_workers, 3):
+    cols = st.columns(3)
+    for col_idx in range(3):
+        w_idx = row_start + col_idx
+        if w_idx < num_workers:
+            with cols[col_idx]:
+                w_name = st.text_input(f"작업자 {w_idx+1} 성명", value="", placeholder=f"작업자 {w_idx+1} 이름", key=f"worker_name_{w_idx}")
+                if not w_name.strip():
+                    w_name = f"작업자{w_idx+1}"
+                worker_names.append(w_name)
 
 st.markdown("---")
 st.markdown("📍 **현장 위치 및 날씨 자동 가져오기 (GPS 연동)**")
-st.write("스마트폰에서 아래 버튼을 누르고 **'위치 권한 허용'**을 누르면 현재 계신 곳의 주소와 날씨가 자동으로 채워집니다.")
-
-# 브라우저 GPS 가져오기 컴포넌트 실행
 loc_data = streamlit_geolocation()
 
 auto_location = ""
@@ -125,7 +126,6 @@ if loc_data and loc_data.get('latitude') and loc_data.get('longitude'):
     lat = loc_data.get('latitude')
     lon = loc_data.get('longitude')
 
-    # 1. 위경도를 한국어 주소로 변환 (OpenStreetMap Nominatim 무료 API)
     try:
         geo_url = f"https://nominatim.openstreetmap.org/reverse?format=json&lat={lat}&lon={lon}&zoom=18&addressdetails=1"
         headers = {'User-Agent': 'SmartTBMApp/1.0'}
@@ -142,7 +142,6 @@ if loc_data and loc_data.get('latitude') and loc_data.get('longitude'):
     except:
         auto_location = f"위도: {lat:.4f}, 경도: {lon:.4f}"
 
-    # 2. Open-Meteo를 통해 실시간 기온 조회
     try:
         weather_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=true"
         w_res = requests.get(weather_url, timeout=3).json()
@@ -152,20 +151,24 @@ if loc_data and loc_data.get('latitude') and loc_data.get('longitude'):
         auto_weather = "기온 20°C (야외 작업 양호)"
 
 location = st.text_input("📍 작업 위치", value=auto_location, placeholder="예: (위 버튼을 누르면 자동 입력됨)")
-weather_info = st.text_input("⛅ 현장 날씨", value=auto_weather, placeholder="예: 기온 22°C (GPS 연동 시 자동 입력됨)")
+weather_info = st.text_input("⛅ 현장 날씨", value=auto_weather, placeholder="예: 기온 22°C")
 
 work_content = st.text_area("🔧 작업 내용 입력", placeholder="예: 엘리베이터 기계실 부품 양중", height=100)
 
-# --- 사진 첨부 방식 선택 ---
+# --- 사진 다중 첨부 방식 선택 ---
 st.markdown("---")
-st.markdown("📸 **현장 활동 사진 첨부**")
-upload_mode = st.radio("첨부 방식을 선택하세요:", ["📁 파일 / 앨범에서 선택", "📷 카메라로 직접 촬영"], horizontal=True)
+st.markdown("📸 **현장 활동 사진 다중 첨부 (여러 장 선택 가능)**")
+upload_mode = st.radio("첨부 방식을 선택하세요:", ["📁 파일 / 앨범에서 여러 장 선택", "📷 카메라로 촬영 (1장씩)"], horizontal=True)
 
-uploaded_file = None
-if upload_mode == "📁 파일 / 앨범에서 선택":
-    uploaded_file = st.file_uploader("이미지 파일 업로드", type=["jpg", "jpeg", "png"])
+uploaded_files = []
+if upload_mode == "📁 파일 / 앨범에서 여러 장 선택":
+    files = st.file_uploader("이미지 파일 다중 업로드", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
+    if files:
+        uploaded_files = files
 else:
-    uploaded_file = st.camera_input("카메라로 현장 촬영하기")
+    cam_file = st.camera_input("카메라로 현장 촬영하기")
+    if cam_file:
+        uploaded_files = [cam_file]
 
 submitted = st.button("🚀 TBM 위험성평가 생성 및 메일 자동 발송", type="primary", use_container_width=True)
 
@@ -181,7 +184,7 @@ if submitted:
         with st.spinner("🤖 AI가 현장 작업 내용을 분석하여 위험성평가를 작성 중입니다..."):
             try:
                 genai.configure(api_key=active_key)
-                model = genai.GenerativeModel('gemini-3.5-flash-lite')
+                model = genai.GenerativeModel('gemini-3.6-flash')
 
                 prompt = f"""
                 너는 베테랑 건설/제조업 안전관리 전문가야. 다음 작업 내용에 대해 산업안전보건기준에 맞추어 위험성평가를 수행해줘.
@@ -316,18 +319,25 @@ if submitted:
 
         story.append(Spacer(1, 10))
 
-        if uploaded_file is not None:
-            story.append(Paragraph("[현장 활동 사진]", h2_style))
+        # --- 사진 다중 압축 및 순차 삽입 로직 ---
+        if uploaded_files:
+            story.append(Paragraph(f"[현장 활동 사진 ({len(uploaded_files)}장)]", h2_style))
             story.append(Spacer(1, 4))
-            try:
-                temp_img_path = "temp_uploaded_img.png"
-                with open(temp_img_path, "wb") as f:
-                    f.write(uploaded_file.getbuffer())
+            
+            for i, f_obj in enumerate(uploaded_files):
+                try:
+                    temp_img_path = f"temp_compressed_img_{i}.jpg"
+                    pil_img = PilImage.open(f_obj)
+                    pil_img.thumbnail((800, 800))
+                    if pil_img.mode in ("RGBA", "P"):
+                        pil_img = pil_img.convert("RGB")
+                    pil_img.save(temp_img_path, "JPEG", quality=80)
 
-                img = RLImage(temp_img_path, width=220, height=140)
-                story.append(img)
-            except Exception as img_err:
-                story.append(Paragraph(f"(사진 삽입 생략: {img_err})", style_normal))
+                    img = RLImage(temp_img_path, width=220, height=140)
+                    story.append(img)
+                    story.append(Spacer(1, 5))
+                except Exception as img_err:
+                    story.append(Paragraph(f"(사진 {i+1} 삽입 생략: {img_err})", style_normal))
 
         doc.build(story)
         pdf_data = pdf_buffer.getvalue()
