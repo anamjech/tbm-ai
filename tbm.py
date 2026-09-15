@@ -28,7 +28,7 @@ FIXED_SMTP_SERVER = "smtp.gmail.com"
 FIXED_SMTP_PORT = 465
 FIXED_SENDER_EMAIL = "jechanam@gmail.com"        
 FIXED_SENDER_PASSWORD = "emhvjdvudtlcddeq"    
-FIXED_RECEIVER_EMAIL = "safety@company.com"     # 👈 필요시 받을 메일 주소로 변경하세요!
+FIXED_RECEIVER_EMAIL = "jech@anamt.co.kr"     # 👈 필요시 받을 메일 주소로 변경하세요!
 
 # --- 0. 한글 폰트 강제 등록 ---
 try:
