@@ -152,10 +152,10 @@ if loc_data and loc_data.get('latitude') and loc_data.get('longitude'):
         auto_weather = "기온 20°C (야외 작업 양호)"
 
 # 위치 및 날씨 입력 필드 (자동 세팅되되, 필요하면 직접 수정도 가능)
-location = st.text_input("📍 작업 위치", value=auto_location, placeholder="예: 본관 3층 외벽 작업장 (위 버튼을 누르면 자동 입력됨)")
+location = st.text_input("📍 작업 위치", value=auto_location, placeholder="예: (위 버튼을 누르면 자동 입력됨)")
 weather_info = st.text_input("⛅ 현장 날씨", value=auto_weather, placeholder="예: 기온 22°C (GPS 연동 시 자동 입력됨)")
 
-work_content = st.text_area("🔧 작업 내용 입력", placeholder="예: 본관 3층 외벽 비계 해체 및 자재 인양 작업", height=100)
+work_content = st.text_area("🔧 작업 내용 입력", placeholder="예: 엘리베이터 기계실 부품 양중", height=100)
 
 # --- 사진 첨부 방식 선택 (카메라 직접 촬영 또는 앨범 파일 선택) ---
 st.markdown("---")
