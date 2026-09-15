@@ -1,5 +1,4 @@
 import streamlit as st
-import requests
 import datetime
 import os
 import smtplib
@@ -8,7 +7,9 @@ from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders
 from io import BytesIO
+import requests
 import google.generativeai as genai
+from streamlit_geolocation import streamlit_geolocation
 
 # ReportLab PDF 생성용 라이브러리
 from reportlab.lib.pagesizes import A4
@@ -24,9 +25,9 @@ from reportlab.graphics.shapes import Drawing, Circle, String
 # ==========================================
 FIXED_SMTP_SERVER = "smtp.daum.net"
 FIXED_SMTP_PORT = 465
-FIXED_SENDER_EMAIL = "your_daum_id@daum.net"        # 👈 발송할 본인의 다음(Daum) 메일 주소
+FIXED_SENDER_EMAIL = "your_daum_id@daum.net"        # 👈 본인의 다음(Daum) 메일 주소로 변경하세요
 FIXED_SENDER_PASSWORD = "your_daum_password"    # 👈 다음 메일 비밀번호 (또는 앱 비밀번호)
-FIXED_RECEIVER_EMAIL = "safety@company.com"     # 👈 보고서를 받을 안전관리자(또는 대표님) 메일 주소
+FIXED_RECEIVER_EMAIL = "safety@company.com"     # 👈 보고서를 받을 안전관리자 메일 주소
 
 # --- 0. 한글 폰트 강제 등록 (리눅스 서버 / 윈도우 환경 자동 분기) ---
 try:
@@ -34,11 +35,9 @@ try:
     windows_font_path = 'C:/Windows/Fonts/malgun.ttf'
     
     if os.path.exists(linux_font_path):
-        # 스트림릿 클라우드 (리눅스 서버) 환경
         pdfmetrics.registerFont(TTFont('NanumGothic', linux_font_path))
         KOREAN_FONT = 'NanumGothic'
     elif os.path.exists(windows_font_path):
-        # 내 데스크톱 (윈도우) 환경
         pdfmetrics.registerFont(TTFont('Malgun', windows_font_path))
         KOREAN_FONT = 'Malgun'
     else:
@@ -53,38 +52,12 @@ def clean_text_for_pdf(text):
     text = text.replace('<br>', '<br/>').replace('<BR>', '<br/>').replace('<br />', '<br/>')
     return text
 
-# --- 빨간색 이름 도장 생성 함수 (사이즈 축소) ---
+# --- 빨간색 이름 도장 생성 함수 ---
 def create_name_stamp(name):
     d = Drawing(35, 35)
     d.add(Circle(17.5, 17.5, 15, strokeColor=colors.HexColor("#DC2626"), fillColor=colors.white, strokeWidth=1.2))
     d.add(String(17.5, 13, name, textAnchor='middle', fontName=KOREAN_FONT, fontSize=8.5, fillColor=colors.HexColor("#DC2626")))
     return d
-
-# --- 자동 GPS 위치 및 날씨 정보 조회 ---
-def get_auto_location_and_weather():
-    lat, lon = 37.5665, 126.9780
-    location_str = "대한민국 서울특별시"
-    try:
-        geo_res = requests.get("https://ipapi.co/json/", timeout=3).json()
-        city = geo_res.get("city", "서울")
-        region = geo_res.get("region", "")
-        country = geo_res.get("country_name", "대한민국")
-        location_str = f"{country} {region} {city}".strip()
-        lat = geo_res.get("latitude", 37.5665)
-        lon = geo_res.get("longitude", 126.9780)
-    except:
-        pass
-
-    weather_str = "현재 기온 24°C (야외 작업 양호)"
-    try:
-        weather_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=true"
-        w_res = requests.get(weather_url, timeout=3).json()
-        temp = w_res.get("current_weather", {}).get("temperature", 24)
-        weather_str = f"현재 기온 {temp}°C (야외 작업 양호)"
-    except:
-        pass
-
-    return location_str, weather_str
 
 # --- 1. 페이지 설정 및 디자인 ---
 st.set_page_config(page_title="스마트 현장 TBM 자동화 시스템", page_icon="🛡️", layout="centered")
@@ -113,10 +86,7 @@ with st.sidebar:
     st.markdown("---")
     st.info(f"📬 **메일 자동 수신처**\n\n모든 TBM 보고서는 아래 주소로 자동 발송됩니다:\n`{FIXED_RECEIVER_EMAIL}`")
 
-# --- 자동 위치/날씨 가져오기 ---
-auto_location, auto_weather = get_auto_location_and_weather()
-
-# --- 3. 메인 입력 영역 (실시간 반응형) ---
+# --- 3. 메인 입력 영역 ---
 st.markdown("### 📝 현장 TBM 정보 입력")
 
 site_name = st.text_input("🏢 현장명 입력", placeholder="예: 서울 OO오피스텔 신축공사 현장")
@@ -128,21 +98,75 @@ with col2:
     worker_count = st.number_input("참여 인원 (명)", min_value=1, max_value=15, value=3)
 
 st.markdown("---")
-st.markdown("👥 **참여 작업자 성명 입력**")
+st.markdown("👥 **참여 작업자 성명 입력** (빈칸에 이름을 바로 입력하세요)")
 
 worker_names = []
 cols_input = st.columns(min(int(worker_count), 3))
 for i in range(int(worker_count)):
     col_idx = i % 3
     with cols_input[col_idx]:
-        w_name = st.text_input(f"작업자 {i+1} 성명", value=f"작업자{i+1}", key=f"worker_name_{i}")
+        w_name = st.text_input(f"작업자 {i+1} 성명", value="", placeholder=f"작업자 {i+1} 이름", key=f"worker_name_{i}")
+        if not w_name.strip():
+            w_name = f"작업자{i+1}"
         worker_names.append(w_name)
 
 st.markdown("---")
-location = st.text_input("📍 작업 위치 (자동 GPS 감지됨)", value=auto_location)
+st.markdown("📍 **현장 위치 및 날씨 자동 가져오기 (GPS 연동)**")
+st.write("스마트폰에서 아래 버튼을 누르고 **'위치 권한 허용'**을 누르면 현재 계신 곳의 주소와 날씨가 자동으로 채워집니다.")
+
+# 브라우저 GPS 가져오기 컴포넌트 실행
+loc_data = streamlit_geolocation()
+
+auto_location = ""
+auto_weather = ""
+
+if loc_data and loc_data.get('latitude') and loc_data.get('longitude'):
+    lat = loc_data.get('latitude')
+    lon = loc_data.get('longitude')
+    
+    # 1. 위경도를 한국어 주소로 변환 (OpenStreetMap Nominatim 무료 API)
+    try:
+        geo_url = f"https://nominatim.openstreetmap.org/reverse?format=json&lat={lat}&lon={lon}&zoom=18&addressdetails=1"
+        headers = {'User-Agent': 'SmartTBMApp/1.0'}
+        res = requests.get(geo_url, headers=headers, timeout=3).json()
+        address = res.get('display_name', '')
+        if address:
+            parts = address.split(', ')
+            # 한국 주소 체계 역순 조합 (예: 서울특별시 중구 세종대로 ...)
+            if len(parts) >= 4:
+                auto_location = f"{parts[-3]} {parts[-4]} {parts[-5]}" if len(parts)>=5 else address
+            else:
+                auto_location = address
+        else:
+            auto_location = f"위도: {lat:.4f}, 경도: {lon:.4f}"
+    except:
+        auto_location = f"위도: {lat:.4f}, 경도: {lon:.4f}"
+
+    # 2. Open-Meteo를 통해 실시간 기온 조회
+    try:
+        weather_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=true"
+        w_res = requests.get(weather_url, timeout=3).json()
+        temp = w_res.get("current_weather", {}).get("temperature", "20")
+        auto_weather = f"기온 {temp}°C (야외 작업 양호)"
+    except:
+        auto_weather = "기온 20°C (야외 작업 양호)"
+
+# 위치 및 날씨 입력 필드 (자동 세팅되되, 필요하면 직접 수정도 가능)
+location = st.text_input("📍 작업 위치", value=auto_location, placeholder="예: 본관 3층 외벽 작업장 (위 버튼을 누르면 자동 입력됨)")
+weather_info = st.text_input("⛅ 현장 날씨", value=auto_weather, placeholder="예: 기온 22°C (GPS 연동 시 자동 입력됨)")
+
 work_content = st.text_area("🔧 작업 내용 입력", placeholder="예: 본관 3층 외벽 비계 해체 및 자재 인양 작업", height=100)
 
-uploaded_file = st.file_uploader("📸 현장 활동 사진 업로드", type=["jpg", "jpeg", "png"])
+# --- 사진 첨부 방식 선택 (카메라 직접 촬영 또는 앨범 파일 선택) ---
+st.markdown("---")
+st.markdown("📸 **현장 활동 사진 첨부**")
+upload_mode = st.radio("첨부 방식을 선택하세요:", ["📁 파일 / 앨범에서 선택", "📷 카메라로 직접 촬영"], horizontal=True)
+
+uploaded_file = None
+if upload_mode == "📁 파일 / 앨범에서 선택":
+    uploaded_file = st.file_uploader("이미지 파일 업로드", type=["jpg", "jpeg", "png"])
+else:
+    uploaded_file = st.camera_input("카메라로 현장 촬영하기")
 
 submitted = st.button("🚀 TBM 위험성평가 생성 및 메일 자동 발송", type="primary", use_container_width=True)
 
@@ -159,7 +183,7 @@ if submitted:
         with st.spinner("🤖 AI가 현장 작업 내용을 분석하여 위험성평가를 작성 중입니다..."):
             try:
                 genai.configure(api_key=active_key)
-                model = genai.GenerativeModel('gemini-3.6-flash')  # 👈 원래 쓰시던 최신 모델 유지!
+                model = genai.GenerativeModel('gemini-3.6-flash')
                 
                 prompt = f"""
                 너는 베테랑 건설/제조업 안전관리 전문가야. 다음 작업 내용에 대해 산업안전보건기준에 맞추어 위험성평가를 수행해줘.
@@ -215,8 +239,8 @@ if submitted:
 
         meta_data = [
             [Paragraph("<b>현장명</b>", style_normal), Paragraph(site_name, style_normal), Paragraph("<b>작업 일자</b>", style_normal), Paragraph(str(tbm_date), style_normal)],
-            [Paragraph("<b>작업 위치</b>", style_normal), Paragraph(location, style_normal), Paragraph("<b>참여 인원</b>", style_normal), Paragraph(f"{worker_count}명", style_normal)],
-            [Paragraph("<b>현장 날씨</b>", style_normal), Paragraph(auto_weather, style_normal), "", ""],
+            [Paragraph("<b>작업 위치</b>", style_normal), Paragraph(location, style_normal), Paragraph("<b>현장 날씨</b>", style_normal), Paragraph(weather_info if weather_info else "정보 없음", style_normal)],
+            [Paragraph("<b>참여 인원</b>", style_normal), Paragraph(f"{worker_count}명", style_normal), "", ""],
             [Paragraph("<b>작업 내용</b>", style_normal), Paragraph(work_content, style_normal), "", ""]
         ]
         meta_table = Table(meta_data, colWidths=[70, 190, 75, 190])
@@ -320,39 +344,43 @@ if submitted:
         # --- 7. Daum 메일 서버를 통한 자동 이메일 발송 로직 ---
         with st.spinner("📧 Daum 메일 서버를 통해 안전관리자에게 문서를 전송 중입니다..."):
             try:
-                msg = MIMEMultipart()
-                msg['From'] = FIXED_SENDER_EMAIL
-                msg['To'] = FIXED_RECEIVER_EMAIL
-                msg['Subject'] = f"[TBM 보고서] [{site_name}] {tbm_date} 위험성평가 결과"
+                if "your_daum_id" in FIXED_SENDER_EMAIL:
+                    st.warning("⚠️ 메일 발송 설정(아이디/비밀번호)이 예시 값(`your_daum_id`)으로 되어 있어 메일 발송을 건너뜁니다. (AI 분석과 PDF 다운로드는 정상 작동합니다!)")
+                else:
+                    msg = MIMEMultipart()
+                    msg['From'] = FIXED_SENDER_EMAIL
+                    msg['To'] = FIXED_RECEIVER_EMAIL
+                    msg['Subject'] = f"[TBM 보고서] [{site_name}] {tbm_date} 위험성평가 결과"
 
-                body = f"""
-                안녕하세요, 안전관리 담당자님.
-                
-                [{site_name}] 현장의 {tbm_date} TBM 및 위험성평가 보고서가 자동 접수되었습니다.
-                
-                - 현장명: {site_name}
-                - 작업 일자: {tbm_date}
-                - 작업 위치: {location}
-                - 참여 인원: {worker_count}명 ({', '.join(worker_names)})
-                - 작업 내용: {work_content}
-                
-                첨부된 PDF 파일을 확인해 주시기 바랍니다.
-                
-                - 스마트 TBM 자동화 시스템 -
-                """
-                msg.attach(MIMEText(body, 'plain'))
+                    body = f"""
+                    안녕하세요, 안전관리 담당자님.
+                    
+                    [{site_name}] 현장의 {tbm_date} TBM 및 위험성평가 보고서가 자동 접수되었습니다.
+                    
+                    - 현장명: {site_name}
+                    - 작업 일자: {tbm_date}
+                    - 작업 위치: {location}
+                    - 현장 날씨: {weather_info}
+                    - 참여 인원: {worker_count}명 ({', '.join(worker_names)})
+                    - 작업 내용: {work_content}
+                    
+                    첨부된 PDF 파일을 확인해 주시기 바랍니다.
+                    
+                    - 스마트 TBM 자동화 시스템 -
+                    """
+                    msg.attach(MIMEText(body, 'plain'))
 
-                part = MIMEBase('application', 'octet-stream')
-                part.set_payload(pdf_data)
-                encoders.encode_base64(part)
-                part.add_header('Content-Disposition', f'attachment; filename=TBM_Report_{tbm_date}.pdf')
-                msg.attach(part)
+                    part = MIMEBase('application', 'octet-stream')
+                    part.set_payload(pdf_data)
+                    encoders.encode_base64(part)
+                    part.add_header('Content-Disposition', f'attachment; filename=TBM_Report_{tbm_date}.pdf')
+                    msg.attach(part)
 
-                server = smtplib.SMTP_SSL(FIXED_SMTP_SERVER, FIXED_SMTP_PORT)
-                server.login(FIXED_SENDER_EMAIL, FIXED_SENDER_PASSWORD)
-                server.sendmail(FIXED_SENDER_EMAIL, FIXED_RECEIVER_EMAIL, msg.as_string())
-                server.quit()
+                    server = smtplib.SMTP_SSL(FIXED_SMTP_SERVER, FIXED_SMTP_PORT, timeout=10)
+                    server.login(FIXED_SENDER_EMAIL, FIXED_SENDER_PASSWORD)
+                    server.sendmail(FIXED_SENDER_EMAIL, FIXED_RECEIVER_EMAIL, msg.as_string())
+                    server.quit()
 
-                st.success(f"🎉 메일 발송 성공! 지정된 관리자 메일함({FIXED_RECEIVER_EMAIL})으로 안전하게 전송되었습니다.")
+                    st.success(f"🎉 메일 발송 성공! 지정된 관리자 메일함({FIXED_RECEIVER_EMAIL})으로 안전하게 전송되었습니다.")
             except Exception as mail_err:
-                st.error(f"❌ 메일 발송 실패: {mail_err}")
+                st.error(f"❌ 메일 발송 실패 (네트워크 또는 계정 설정 확인): {mail_err}")
