@@ -158,7 +158,7 @@ work_content = st.text_area("🔧 작업 내용 입력", placeholder="예: 엘�
 # --- 사진 다중 첨부 방식 선택 ---
 st.markdown("---")
 st.markdown("📸 **현장 활동 사진 다중 첨부 (여러 장 선택 가능)**")
-upload_mode = st.radio("첨부 방식을 선택하세요:", ["📁 파일 / 앨범에서 여러 장 선택", "📷 카메라로 촬영 (1장씩)"], horizontal=True)
+upload_mode = st.radio("첨부 방식을 선택하세요:", ["📁 파일 / 앨범에서 여러 장 선택", "📷 카메라로 촬영 (1장)"], horizontal=True)
 
 uploaded_files = []
 if upload_mode == "📁 파일 / 앨범에서 여러 장 선택":
