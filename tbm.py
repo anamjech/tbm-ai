@@ -89,7 +89,7 @@ with st.sidebar:
 # --- 3. 메인 입력 영역 ---
 st.markdown("### 📝 현장 TBM 정보 입력")
 
-site_name = st.text_input("🏢 현장명 입력", placeholder="예: 서울 OO오피스텔 신축공사 현장")
+site_name = st.text_input("🏢 현장명 입력", placeholder="예: 에이엔티 테스트 타워 설치")
 
 col1, col2 = st.columns(2)
 with col1:
