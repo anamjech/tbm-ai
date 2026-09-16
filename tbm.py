@@ -13,7 +13,6 @@ import google.generativeai as genai
 from streamlit_geolocation import streamlit_geolocation
 from PIL import Image as PilImage
 
-# ReportLab PDF 생성용 라이브러리
 from reportlab.lib.pagesizes import A4
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage
 from reportlab.lib.styles import ParagraphStyle
@@ -22,25 +21,14 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.graphics.shapes import Drawing, Circle, String
 
-# ==========================================
-# 🛠️ [고정 설정] 발송 및 수신 메일 계정 설정
-# ==========================================
-FIXED_SMTP_SERVER = "smtp.gmail.com"
-FIXED_SMTP_PORT = 465
-FIXED_SENDER_EMAIL = "jechanam@gmail.com"        
-FIXED_SENDER_PASSWORD = "emhvjdvudtlcddeq"    
-FIXED_RECEIVER_EMAIL = "jech@anamt.co.kr"     # 👈 필요시 받을 메일 주소로 변경하세요!
+st.set_page_config(page_title="TBM Studio", page_icon="✦", layout="centered", initial_sidebar_state="expanded")
 
-# --- 0. 한글 폰트 강제 등록 ---
 try:
-    linux_font_path = '/usr/share/fonts/truetype/nanum/NanumGothic.ttf'
-    windows_font_path = 'C:/Windows/Fonts/malgun.ttf'
-
-    if os.path.exists(linux_font_path):
-        pdfmetrics.registerFont(TTFont('NanumGothic', linux_font_path))
+    if os.path.exists('/usr/share/fonts/truetype/nanum/NanumGothic.ttf'):
+        pdfmetrics.registerFont(TTFont('NanumGothic', '/usr/share/fonts/truetype/nanum/NanumGothic.ttf'))
         KOREAN_FONT = 'NanumGothic'
-    elif os.path.exists(windows_font_path):
-        pdfmetrics.registerFont(TTFont('Malgun', windows_font_path))
+    elif os.path.exists('C:/Windows/Fonts/malgun.ttf'):
+        pdfmetrics.registerFont(TTFont('Malgun', 'C:/Windows/Fonts/malgun.ttf'))
         KOREAN_FONT = 'Malgun'
     else:
         KOREAN_FONT = 'Helvetica'
@@ -48,350 +36,159 @@ except Exception:
     KOREAN_FONT = 'Helvetica'
 
 def clean_text_for_pdf(text):
-    if not text:
-        return ""
-    text = text.replace('**', '')
-    text = text.replace('<br>', '<br/>').replace('<BR>', '<br/>').replace('<br />', '<br/>')
-    return text
+    return (text or '').replace('**', '').replace('<br>', '<br/>').replace('<BR>', '<br/>').replace('<br />', '<br/>')
 
-# --- 빨간색 이름 도장 생성 함수 ---
 def create_name_stamp(name):
-    d = Drawing(35, 35)
-    d.add(Circle(17.5, 17.5, 15, strokeColor=colors.HexColor("#DC2626"), fillColor=colors.white, strokeWidth=1.2))
-    d.add(String(17.5, 13, name, textAnchor='middle', fontName=KOREAN_FONT, fontSize=8.5, fillColor=colors.HexColor("#DC2626")))
-    return d
+    stamp = Drawing(35, 35)
+    stamp.add(Circle(17.5, 17.5, 15, strokeColor=colors.HexColor('#0E7490'), fillColor=colors.white, strokeWidth=1.2))
+    stamp.add(String(17.5, 13, name, textAnchor='middle', fontName=KOREAN_FONT, fontSize=8.5, fillColor=colors.HexColor('#0E7490')))
+    return stamp
 
-# --- 1. 페이지 설정 및 디자인 ---
-st.set_page_config(page_title="스마트 현장 TBM 자동화 시스템", page_icon="🛡️", layout="centered")
+# Sensitive values belong in Streamlit Secrets, never in source control.
+def secret(name, default=''):
+    return st.secrets[name] if name in st.secrets else default
 
-st.markdown("""
-    <style>
-    .main-header { font-size: 22px; font-weight: bold; color: #1E3A8A; text-align: center; margin-bottom: 5px; }
-    .sub-desc { font-size: 13px; color: #475569; text-align: center; margin-bottom: 20px; }
-    </style>
-""", unsafe_allow_html=True)
+GEMINI_API_KEY = secret('GEMINI_API_KEY')
+SMTP_SERVER = secret('SMTP_SERVER', 'smtp.gmail.com')
+SMTP_PORT = int(secret('SMTP_PORT', 465))
+SENDER_EMAIL = secret('SENDER_EMAIL')
+SENDER_PASSWORD = secret('SENDER_PASSWORD')
+RECEIVER_EMAIL = secret('RECEIVER_EMAIL')
 
-st.markdown('<div class="main-header">🛡️ 스마트 현장 TBM 및 위험성평가 자동화</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-desc">작업 내용을 입력하면 AI가 위험성평가를 수행하고, PDF 생성 및 지정 메일함으로 자동 발송됩니다.</div>', unsafe_allow_html=True)
+st.markdown('''
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+KR:wght@400;500;600;700;800&display=swap');
+:root { --ink:#f7f8fa; --muted:#9ba4b7; --panel:#151923; --line:rgba(255,255,255,.10); --aqua:#61f6dc; --blue:#5a8cff; }
+.stApp { background: radial-gradient(circle at 7% -4%, #24375c 0, transparent 28rem), radial-gradient(circle at 96% 4%, #143b39 0, transparent 25rem), #0d1017; color:var(--ink); }
+[data-testid="stHeader"] { background:transparent; }
+.block-container { max-width:900px; padding-top:2.5rem; padding-bottom:4rem; }
+html, body, [class*="css"], .stMarkdown { font-family:'Noto Sans KR', sans-serif; }
+.hero { position:relative; overflow:hidden; padding:2.2rem 2.2rem 1.9rem; border:1px solid var(--line); border-radius:24px; background:linear-gradient(130deg,rgba(30,40,62,.9),rgba(17,22,31,.9)); box-shadow:0 18px 60px rgba(0,0,0,.28), inset 0 1px rgba(255,255,255,.07); margin-bottom:1.5rem; }
+.hero:after { content:''; position:absolute; width:220px; height:220px; right:-75px; top:-120px; border-radius:50%; background:rgba(97,246,220,.14); filter:blur(18px); }
+.eyebrow { color:var(--aqua); font:500 11px 'DM Mono', monospace; letter-spacing:.16em; }
+.hero h1 { font-size:30px; line-height:1.25; letter-spacing:-.045em; margin:.45rem 0 .55rem; color:#fff; }
+.hero p { max-width:620px; color:var(--muted); font-size:14px; margin:0; line-height:1.7; }
+.section-label { color:#fff; font-size:18px; font-weight:700; letter-spacing:-.03em; margin:2rem 0 .8rem; }
+.section-label span { color:var(--aqua); margin-right:.35rem; }
+[data-testid="stSidebar"] { background:linear-gradient(180deg,#111722,#0d1017); border-right:1px solid var(--line); }
+[data-testid="stSidebar"] h2 { font-size:18px; }
+.stTextInput input, .stTextArea textarea, [data-baseweb="input"] input { background:rgba(255,255,255,.045)!important; color:#f8fafc!important; border:1px solid var(--line)!important; border-radius:12px!important; }
+.stTextInput input:focus, .stTextArea textarea:focus { border-color:var(--aqua)!important; box-shadow:0 0 0 3px rgba(97,246,220,.11)!important; }
+label, .stMarkdown p { color:#dbe1eb; }
+[data-testid="stNumberInput"] button, [data-testid="stDateInput"] button { background:#212938!important; color:var(--aqua)!important; border-color:var(--line)!important; }
+.stRadio [role="radiogroup"] { gap:8px; }
+.stRadio label { background:rgba(255,255,255,.04); border:1px solid var(--line); border-radius:999px; padding:.35rem .65rem; }
+[data-testid="stFileUploader"] { border:1px dashed rgba(97,246,220,.42); border-radius:16px; background:rgba(97,246,220,.035); }
+.stButton > button { min-height:52px; border:0!important; border-radius:14px!important; color:#071817!important; font-weight:800!important; background:linear-gradient(100deg,#61f6dc,#76d8ff)!important; box-shadow:0 10px 28px rgba(97,246,220,.20); transition:transform .18s ease, box-shadow .18s ease; }
+.stButton > button:hover { transform:translateY(-2px); box-shadow:0 14px 34px rgba(97,246,220,.34); }
+[data-testid="stAlert"] { border-radius:13px; }
+hr { border-color:var(--line)!important; margin:1.6rem 0!important; }
+.footer { text-align:center; color:#6f7a8d; font:11px 'DM Mono', monospace; letter-spacing:.08em; margin-top:2.6rem; }
+</style>
+<section class="hero"><div class="eyebrow">SAFETY INTELLIGENCE / TBM STUDIO</div><h1>현장 안전을 더 선명하게,<br>보고는 더 매끄럽게.</h1><p>작업 정보를 입력하면 AI가 위험성평가를 정리하고, 공식 보고서를 PDF와 메일로 즉시 전달합니다.</p></section>
+''', unsafe_allow_html=True)
 
-# --- 2. 사이드바 (설정) ---
 with st.sidebar:
-    st.header("⚙️ 시스템 설정")
-
-    try:
-        active_key = st.secrets["GEMINI_API_KEY"]
-        st.success("🔒 사내 테스트용 API 키 자동 적용됨")
-    except:
-        active_key = ""
-        st.error("⚠️ Streamlit Secrets 설정이 안 되어 있습니다!")
-
-    st.markdown("---")
-    st.info(f"📬 **메일 자동 수신처**\n\n모든 TBM 보고서는 아래 주소로 자동 발송됩니다:\n`{FIXED_RECEIVER_EMAIL}`")
-
-# --- 3. 메인 입력 영역 ---
-st.markdown("### 📝 현장 TBM 정보 입력")
-
-site_name = st.text_input("🏢 현장명 입력", placeholder="예: 에이엔티 테스트 타워 설치")
-
-col1, col2 = st.columns(2)
-with col1:
-    tbm_date = st.date_input("📅 작업 날짜 선택", value=datetime.date.today())
-with col2:
-    worker_count = st.number_input("참여 인원 (명)", min_value=1, max_value=15, value=3)
-
-st.markdown("---")
-st.markdown("👥 **참여 작업자 성명 입력**")
-
-worker_names = []
-num_workers = int(worker_count)
-
-for row_start in range(0, num_workers, 3):
-    cols = st.columns(3)
-    for col_idx in range(3):
-        w_idx = row_start + col_idx
-        if w_idx < num_workers:
-            with cols[col_idx]:
-                w_name = st.text_input(f"작업자 {w_idx+1} 성명", value="", placeholder=f"작업자 {w_idx+1} 이름", key=f"worker_name_{w_idx}")
-                if not w_name.strip():
-                    w_name = f"작업자{w_idx+1}"
-                worker_names.append(w_name)
-
-st.markdown("---")
-st.markdown("📍 **현장 위치 및 날씨 자동 가져오기 (GPS 연동)**")
-loc_data = streamlit_geolocation()
-
-auto_location = ""
-auto_weather = ""
-
-if loc_data and loc_data.get('latitude') and loc_data.get('longitude'):
-    lat = loc_data.get('latitude')
-    lon = loc_data.get('longitude')
-
-    try:
-        geo_url = f"https://nominatim.openstreetmap.org/reverse?format=json&lat={lat}&lon={lon}&zoom=18&addressdetails=1"
-        headers = {'User-Agent': 'SmartTBMApp/1.0'}
-        res = requests.get(geo_url, headers=headers, timeout=3).json()
-        address = res.get('display_name', '')
-        if address:
-            parts = address.split(', ')
-            if len(parts) >= 4:
-                auto_location = f"{parts[-3]} {parts[-4]} {parts[-5]}" if len(parts)>=5 else address
-            else:
-                auto_location = address
-        else:
-            auto_location = f"위도: {lat:.4f}, 경도: {lon:.4f}"
-    except:
-        auto_location = f"위도: {lat:.4f}, 경도: {lon:.4f}"
-
-    try:
-        weather_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=true"
-        w_res = requests.get(weather_url, timeout=3).json()
-        temp = w_res.get("current_weather", {}).get("temperature", "20")
-        auto_weather = f"기온 {temp}°C (야외 작업 양호)"
-    except:
-        auto_weather = "기온 20°C (야외 작업 양호)"
-
-location = st.text_input("📍 작업 위치", value=auto_location, placeholder="예: (위 버튼을 누르면 자동 입력됨)")
-weather_info = st.text_input("⛅ 현장 날씨", value=auto_weather, placeholder="예: 기온 22°C")
-
-work_content = st.text_area("🔧 작업 내용 입력", placeholder="예: 엘리베이터 기계실 부품 양중", height=100)
-
-# --- 사진 다중 첨부 방식 선택 ---
-st.markdown("---")
-st.markdown("📸 **현장 활동 사진 다중 첨부 (여러 장 선택 가능)**")
-upload_mode = st.radio("첨부 방식을 선택하세요:", ["📁 파일 / 앨범에서 여러 장 선택", "📷 카메라로 촬영 (1장)"], horizontal=True)
-
-uploaded_files = []
-if upload_mode == "📁 파일 / 앨범에서 여러 장 선택":
-    files = st.file_uploader("이미지 파일 다중 업로드", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
-    if files:
-        uploaded_files = files
-else:
-    cam_file = st.camera_input("카메라로 현장 촬영하기")
-    if cam_file:
-        uploaded_files = [cam_file]
-
-submitted = st.button("🚀 TBM 위험성평가 생성 및 메일 자동 발송", type="primary", use_container_width=True)
-
-# --- 4. 제출 처리 로직 ---
-if submitted:
-    if not active_key:
-        st.error("⚠️ 스트림릿 Secrets에 Gemini API Key가 설정되지 않았습니다!")
-    elif not site_name:
-        st.error("⚠️ 현장명을 입력해주세요!")
-    elif not work_content:
-        st.error("⚠️ 작업 내용을 입력해주세요!")
+    st.markdown('## ✦ TBM Studio')
+    st.caption('SMART SITE SAFETY SYSTEM')
+    st.divider()
+    st.markdown('#### 시스템 연결')
+    if GEMINI_API_KEY:
+        st.success('AI 분석 엔진이 연결되었습니다.')
     else:
-        with st.spinner("🤖 AI가 현장 작업 내용을 분석하여 위험성평가를 작성 중입니다..."):
+        st.warning('GEMINI_API_KEY를 Secrets에 설정해주세요.')
+    st.markdown('#### 보고서 수신처')
+    st.info(f'`{RECEIVER_EMAIL or "RECEIVER_EMAIL 미설정"}`')
+    st.caption('수신처는 Streamlit Secrets에서 안전하게 관리됩니다.')
+
+st.markdown('<div class="section-label"><span>01</span> 현장 정보</div>', unsafe_allow_html=True)
+site_name = st.text_input('현장명', placeholder='예: 에이엔티 테스트 타워 설치')
+col1, col2 = st.columns(2)
+with col1: tbm_date = st.date_input('작업 날짜', value=datetime.date.today())
+with col2: worker_count = st.number_input('참여 인원', min_value=1, max_value=15, value=3)
+
+st.markdown('<div class="section-label"><span>02</span> 참여 작업자</div>', unsafe_allow_html=True)
+worker_names = []
+for row_start in range(0, int(worker_count), 3):
+    for col_idx, col in enumerate(st.columns(3)):
+        index = row_start + col_idx
+        if index < int(worker_count):
+            with col:
+                name = st.text_input(f'작업자 {index + 1}', placeholder='성명', key=f'worker_{index}')
+                worker_names.append(name.strip() or f'작업자{index + 1}')
+
+st.markdown('<div class="section-label"><span>03</span> 작업 환경</div>', unsafe_allow_html=True)
+with st.expander('📍 GPS로 현재 위치와 날씨 불러오기', expanded=False):
+    loc_data = streamlit_geolocation()
+auto_location, auto_weather = '', ''
+if 'loc_data' in locals() and loc_data and loc_data.get('latitude') and loc_data.get('longitude'):
+    lat, lon = loc_data['latitude'], loc_data['longitude']
+    try:
+        response = requests.get(f'https://nominatim.openstreetmap.org/reverse?format=json&lat={lat}&lon={lon}&zoom=18', headers={'User-Agent':'TBMStudio/1.0'}, timeout=3).json()
+        auto_location = response.get('display_name', f'위도 {lat:.4f}, 경도 {lon:.4f}')
+    except Exception: auto_location = f'위도 {lat:.4f}, 경도 {lon:.4f}'
+    try:
+        temperature = requests.get(f'https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=true', timeout=3).json()['current_weather']['temperature']
+        auto_weather = f'기온 {temperature}°C'
+    except Exception: auto_weather = '날씨 정보 확인 필요'
+location = st.text_input('작업 위치', value=auto_location, placeholder='예: 엘리베이터 기계실')
+weather_info = st.text_input('현장 날씨', value=auto_weather, placeholder='예: 기온 22°C, 맑음')
+work_content = st.text_area('작업 내용', placeholder='예: 엘리베이터 기계실 부품 양중', height=115)
+
+st.markdown('<div class="section-label"><span>04</span> 현장 기록</div>', unsafe_allow_html=True)
+upload_mode = st.radio('사진 첨부 방식', ['파일 / 앨범에서 선택', '카메라로 촬영'], horizontal=True, label_visibility='collapsed')
+uploaded_files = st.file_uploader('현장 사진', type=['jpg','jpeg','png'], accept_multiple_files=True) if upload_mode == '파일 / 앨범에서 선택' else [f for f in [st.camera_input('현장 촬영')] if f]
+
+submitted = st.button('✦ 위험성평가 생성 및 보고서 발송', type='primary', use_container_width=True)
+
+if submitted:
+    if not GEMINI_API_KEY or not SENDER_EMAIL or not SENDER_PASSWORD or not RECEIVER_EMAIL:
+        st.error('Secrets에 Gemini 및 메일 설정을 완료해주세요.')
+    elif not site_name or not work_content:
+        st.error('현장명과 작업 내용을 입력해주세요.')
+    else:
+        with st.spinner('AI가 현장 작업을 분석하고 있습니다…'):
             try:
-                genai.configure(api_key=active_key)
-                model = genai.GenerativeModel('gemini-3.5-flash-lite')
+                genai.configure(api_key=GEMINI_API_KEY)
+                prompt = f'''너는 건설/제조업 안전관리 전문가다. 작업 내용: {work_content}\n정확히 3개의 위험요인을 도출하고, 아래 헤더를 사용한 마크다운 표만 출력하라.\n| 번호 | 위험요인 | 잠재 위험성 (재해형태) | 감소 대책 (안전조치) |'''
+                ai_result_text = genai.GenerativeModel('gemini-3.5-flash-lite').generate_content(prompt).text
+            except Exception as error:
+                st.error(f'AI 분석 오류: {error}'); st.stop()
+        st.success('위험성평가가 완성되었습니다.')
+        st.markdown('<div class="section-label"><span>RESULT</span> AI 위험성평가</div>', unsafe_allow_html=True)
+        st.markdown(ai_result_text)
 
-                prompt = f"""
-                너는 베테랑 건설/제조업 안전관리 전문가야. 다음 작업 내용에 대해 산업안전보건기준에 맞추어 위험성평가를 수행해줘.
-                작업 내용: {work_content}
-
-                반드시 정확히 3개의 위험요인을 도출하고, 오직 마크다운 표(Table) 형태로만 출력해줘. 다른 인사말이나 설명은 절대 적지 마.
-                표의 헤더는 정확히 이 순서로 해줘:
-                | 번호 | 위험요인 | 잠재 위험성 (재해형태) | 감소 대책 (안전조치) |
-                """
-                response = model.generate_content(prompt)
-                ai_result_text = response.text
-            except Exception as e:
-                st.error(f"AI 분석 중 오류가 발생했습니다: {e}")
-                st.stop()
-
-        st.success("✨ AI 위험성평가 및 현장 데이터 수집 완료!")
-
-        # --- 5. 웹 화면 실시간 결과 미리보기 ---
-        st.markdown("---")
-        st.subheader("📊 [실시간 화면 미리보기] AI 위험성평가 결과")
-
-        web_table_rows = []
-        for line in ai_result_text.split('\n'):
-            if '|' in line and '---' not in line:
-                cols = [c.replace('**', '').strip() for c in line.split('|')[1:-1]]
-                if len(cols) >= 4:
-                    web_table_rows.append(cols)
-
-        if len(web_table_rows) > 0:
-            st.table(web_table_rows[1:])
-        else:
-            st.text(ai_result_text)
-
-        # --- 6. PDF 서류 자동 생성 로직 ---
-        st.info("📄 공식 TBM 문서 정밀 생성 및 작업자 도장 날인 중입니다...")
-
-        pdf_buffer = BytesIO()
-        doc = SimpleDocTemplate(pdf_buffer, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
-        story = []
-
-        style_normal = ParagraphStyle('NormalKorean', fontName=KOREAN_FONT, fontSize=9, leading=14, textColor=colors.HexColor("#334155"))
-        style_header = ParagraphStyle('HeaderKorean', fontName=KOREAN_FONT, fontSize=9, leading=14, textColor=colors.white)
-
-        title_style = ParagraphStyle(
-            'TitleStyle', fontName=KOREAN_FONT, fontSize=16, alignment=1, textColor=colors.HexColor("#1E3A8A"), spaceAfter=15
-        )
-        h2_style = ParagraphStyle(
-            'H2Style', fontName=KOREAN_FONT, fontSize=12, textColor=colors.HexColor("#1E3A8A"), spaceBefore=10, spaceAfter=8
-        )
-
-        story.append(Paragraph(f"TBM (Tool Box Meeting) 및 위험성평가 보고서", title_style))
-        story.append(Spacer(1, 5))
-
-        meta_data = [
-            [Paragraph("<b>현장명</b>", style_normal), Paragraph(site_name, style_normal), Paragraph("<b>작업 일자</b>", style_normal), Paragraph(str(tbm_date), style_normal)],
-            [Paragraph("<b>작업 위치</b>", style_normal), Paragraph(location, style_normal), Paragraph("<b>현장 날씨</b>", style_normal), Paragraph(weather_info if weather_info else "정보 없음", style_normal)],
-            [Paragraph("<b>참여 인원</b>", style_normal), Paragraph(f"{worker_count}명", style_normal), "", ""],
-            [Paragraph("<b>작업 내용</b>", style_normal), Paragraph(work_content, style_normal), "", ""]
-        ]
-        meta_table = Table(meta_data, colWidths=[70, 190, 75, 190])
-        meta_table.setStyle(TableStyle([
-            ('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#F1F5F9")),
-            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#CBD5E1")),
-            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-            ('SPAN', (1, 2), (3, 2)),
-            ('SPAN', (1, 3), (3, 3)),
-            ('PADDING', (0,0), (-1,-1), 5),
-        ]))
-        story.append(meta_table)
-        story.append(Spacer(1, 10))
-
-        story.append(Paragraph("[참여 작업자 서명부]", h2_style))
-        story.append(Spacer(1, 4))
-
-        worker_table_rows = [
-            [Paragraph("<b>번호</b>", style_header), Paragraph("<b>작업자 성명</b>", style_header), Paragraph("<b>서명 (인)</b>", style_header)]
-        ]
-
-        for idx, wname in enumerate(worker_names):
-            stamp = create_name_stamp(wname)
-            worker_table_rows.append([
-                Paragraph(str(idx + 1), style_normal),
-                Paragraph(wname, style_normal),
-                stamp
-            ])
-
-        worker_table = Table(worker_table_rows, colWidths=[50, 250, 234], rowHeights=28)
-        worker_table.setStyle(TableStyle([
-            ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#1E3A8A")),
-            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#CBD5E1")),
-            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-            ('ALIGN', (2,1), (2,-1), 'CENTER'),
-            ('PADDING', (0,0), (-1,-1), 2),
-        ]))
-        story.append(worker_table)
-        story.append(Spacer(1, 10))
-
-        story.append(Paragraph("[AI 안전관리 전문가 분석] 위험성평가 결과", h2_style))
-
-        table_rows = []
-        table_rows.append([
-            Paragraph("<b>번호</b>", style_header),
-            Paragraph("<b>위험요인</b>", style_header),
-            Paragraph("<b>잠재 위험성</b>", style_header),
-            Paragraph("<b>감소 대책</b>", style_header)
-        ])
-
-        for line in ai_result_text.split('\n'):
-            if '|' in line and '---' not in line:
-                cols = [c.strip() for c in line.split('|')[1:-1]]
-                if len(cols) >= 4:
-                    table_rows.append([
-                        Paragraph(clean_text_for_pdf(cols[0]), style_normal),
-                        Paragraph(clean_text_for_pdf(cols[1]), style_normal),
-                        Paragraph(clean_text_for_pdf(cols[2]), style_normal),
-                        Paragraph(clean_text_for_pdf(cols[3]), style_normal)
-                    ])
-
-        if len(table_rows) > 1:
-            risk_table = Table(table_rows, colWidths=[35, 135, 145, 210])
-            risk_table.setStyle(TableStyle([
-                ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#1E3A8A")),
-                ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#CBD5E1")),
-                ('VALIGN', (0,0), (-1,-1), 'TOP'),
-                ('PADDING', (0,0), (-1,-1), 5),
-            ]))
-            story.append(risk_table)
-        else:
-            for line in ai_result_text.split('\n'):
-                if line.strip():
-                    story.append(Paragraph(clean_text_for_pdf(line), style_normal))
-
-        story.append(Spacer(1, 10))
-
-        # --- 사진 다중 압축 및 순차 삽입 로직 ---
-        if uploaded_files:
-            story.append(Paragraph(f"[현장 활동 사진 ({len(uploaded_files)}장)]", h2_style))
-            story.append(Spacer(1, 4))
-            
-            for i, f_obj in enumerate(uploaded_files):
-                try:
-                    temp_img_path = f"temp_compressed_img_{i}.jpg"
-                    pil_img = PilImage.open(f_obj)
-                    pil_img.thumbnail((800, 800))
-                    if pil_img.mode in ("RGBA", "P"):
-                        pil_img = pil_img.convert("RGB")
-                    pil_img.save(temp_img_path, "JPEG", quality=80)
-
-                    img = RLImage(temp_img_path, width=220, height=140)
-                    story.append(img)
-                    story.append(Spacer(1, 5))
-                except Exception as img_err:
-                    story.append(Paragraph(f"(사진 {i+1} 삽입 생략: {img_err})", style_normal))
-
-        doc.build(story)
-        pdf_data = pdf_buffer.getvalue()
-
-        st.download_button(
-            label="📥 TBM 평가서 PDF 다운로드",
-            data=pdf_data,
-            file_name=f"TBM_{site_name}_{tbm_date}.pdf",
-            mime="application/pdf"
-        )
-
-        # --- 7. Gmail 서버를 통한 자동 이메일 발송 로직 ---
-        with st.spinner("📧 Gmail 서버를 통해 안전관리자에게 문서를 전송 중입니다..."):
+        pdf_buffer, story = BytesIO(), []
+        normal = ParagraphStyle('normal', fontName=KOREAN_FONT, fontSize=9, leading=14, textColor=colors.HexColor('#25334A'))
+        header = ParagraphStyle('header', fontName=KOREAN_FONT, fontSize=9, leading=14, textColor=colors.white)
+        title = ParagraphStyle('title', fontName=KOREAN_FONT, fontSize=16, alignment=1, textColor=colors.HexColor('#0E7490'), spaceAfter=15)
+        h2 = ParagraphStyle('h2', fontName=KOREAN_FONT, fontSize=12, textColor=colors.HexColor('#0E7490'), spaceBefore=10, spaceAfter=8)
+        story += [Paragraph('TBM (Tool Box Meeting) 및 위험성평가 보고서', title), Spacer(1, 5)]
+        meta = [[Paragraph('<b>현장명</b>',normal),Paragraph(site_name,normal),Paragraph('<b>작업 일자</b>',normal),Paragraph(str(tbm_date),normal)], [Paragraph('<b>작업 위치</b>',normal),Paragraph(location,normal),Paragraph('<b>현장 날씨</b>',normal),Paragraph(weather_info or '정보 없음',normal)], [Paragraph('<b>참여 인원</b>',normal),Paragraph(f'{worker_count}명',normal),'',''], [Paragraph('<b>작업 내용</b>',normal),Paragraph(work_content,normal),'','']]
+        table = Table(meta, colWidths=[70,190,75,190]); table.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,-1),colors.HexColor('#F0FDFA')),('GRID',(0,0),(-1,-1),.5,colors.HexColor('#B6D9D5')),('SPAN',(1,2),(3,2)),('SPAN',(1,3),(3,3)),('PADDING',(0,0),(-1,-1),5)])); story += [table, Spacer(1,10)]
+        story += [Paragraph('[참여 작업자 서명부]',h2)]
+        workers = [[Paragraph('<b>번호</b>',header),Paragraph('<b>작업자 성명</b>',header),Paragraph('<b>서명 (인)</b>',header)]] + [[Paragraph(str(i+1),normal),Paragraph(n,normal),create_name_stamp(n)] for i,n in enumerate(worker_names)]
+        table = Table(workers,colWidths=[50,250,234],rowHeights=28); table.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#0E7490')),('GRID',(0,0),(-1,-1),.5,colors.HexColor('#B6D9D5')),('ALIGN',(2,1),(2,-1),'CENTER')])); story += [table,Spacer(1,10),Paragraph('[AI 안전관리 전문가 분석] 위험성평가 결과',h2)]
+        rows = [[Paragraph(f'<b>{x}</b>',header) for x in ['번호','위험요인','잠재 위험성','감소 대책']]]
+        for line in ai_result_text.splitlines():
+            cells = [c.strip() for c in line.split('|')[1:-1]] if '|' in line and '---' not in line else []
+            if len(cells) >= 4 and cells[0] != '번호': rows.append([Paragraph(clean_text_for_pdf(x),normal) for x in cells[:4]])
+        if len(rows)>1:
+            table=Table(rows,colWidths=[35,135,145,210]); table.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#0E7490')),('GRID',(0,0),(-1,-1),.5,colors.HexColor('#B6D9D5')),('VALIGN',(0,0),(-1,-1),'TOP'),('PADDING',(0,0),(-1,-1),5)])); story.append(table)
+        for i, file in enumerate(uploaded_files):
             try:
-                msg = MIMEMultipart()
-                msg['From'] = FIXED_SENDER_EMAIL
-                msg['To'] = FIXED_RECEIVER_EMAIL
-                msg['Subject'] = f"[TBM 보고서] [{site_name}] {tbm_date} 위험성평가 결과"
+                image = PilImage.open(file); image.thumbnail((800,800)); image.convert('RGB').save(f'temp_{i}.jpg','JPEG',quality=80); story += [Spacer(1,8),RLImage(f'temp_{i}.jpg',width=220,height=140)]
+            except Exception: pass
+        SimpleDocTemplate(pdf_buffer,pagesize=A4,rightMargin=30,leftMargin=30,topMargin=30,bottomMargin=30).build(story)
+        pdf_data=pdf_buffer.getvalue()
+        st.download_button('PDF 보고서 다운로드',pdf_data,f'TBM_{site_name}_{tbm_date}.pdf','application/pdf',use_container_width=True)
+        with st.spinner('안전관리자에게 보고서를 전송하고 있습니다…'):
+            try:
+                msg=MIMEMultipart(); msg['From']=SENDER_EMAIL; msg['To']=RECEIVER_EMAIL; msg['Subject']=f'[TBM 보고서] {site_name} | {tbm_date}'
+                msg.attach(MIMEText(f'{site_name} 현장의 TBM 및 위험성평가 보고서입니다.\\n\\n작업 내용: {work_content}','plain'))
+                part=MIMEBase('application','octet-stream'); part.set_payload(pdf_data); encoders.encode_base64(part); part.add_header('Content-Disposition','attachment',filename=Header(f'TBM_{site_name}_{tbm_date}.pdf','utf-8').encode()); msg.attach(part)
+                server=smtplib.SMTP_SSL(SMTP_SERVER,SMTP_PORT,timeout=10); server.login(SENDER_EMAIL,SENDER_PASSWORD); server.sendmail(SENDER_EMAIL,RECEIVER_EMAIL,msg.as_string()); server.quit()
+                st.success('보고서가 안전관리자 메일함으로 전송되었습니다.')
+            except Exception as error: st.error(f'메일 발송 실패: {error}')
 
-                body = f"""
-                안녕하세요, 안전관리 담당자님.
-
-                [{site_name}] 현장의 {tbm_date} TBM 및 위험성평가 보고서가 자동 접수되었습니다.
-
-                - 현장명: {site_name}
-                - 작업 일자: {tbm_date}
-                - 작업 위치: {location}
-                - 현장 날씨: {weather_info}
-                - 참여 인원: {worker_count}명 ({', '.join(worker_names)})
-                - 작업 내용: {work_content}
-
-                첨부된 PDF 파일을 확인해 주시기 바랍니다.
-
-                - 스마트 TBM 자동화 시스템 -
-                """
-                msg.attach(MIMEText(body, 'plain'))
-
-                part = MIMEBase('application', 'octet-stream')
-                part.set_payload(pdf_data)
-                encoders.encode_base64(part)
-                
-                # 💡 한글/띄어쓰기 파일명이 깨지지 않도록 UTF-8 인코딩 적용
-                filename_val = f"TBM_{site_name}_{tbm_date}.pdf"
-                encoded_filename = Header(filename_val, 'utf-8').encode()
-                part.add_header('Content-Disposition', 'attachment', filename=encoded_filename)
-                
-                msg.attach(part)
-
-                server = smtplib.SMTP_SSL(FIXED_SMTP_SERVER, FIXED_SMTP_PORT, timeout=10)
-                server.login(FIXED_SENDER_EMAIL, FIXED_SENDER_PASSWORD)
-                server.sendmail(FIXED_SENDER_EMAIL, FIXED_RECEIVER_EMAIL, msg.as_string())
-                server.quit()
-
-                st.success(f"🎉 메일 발송 성공! 지정된 관리자 메일함({FIXED_RECEIVER_EMAIL})으로 안전하게 전송되었습니다.")
-            except Exception as mail_err:
-                st.error(f"❌ 메일 발송 실패 (네트워크 또는 계정 설정 확인): {mail_err}")
+st.markdown('<div class="footer">TBM STUDIO · SAFETY, REFINED</div>', unsafe_allow_html=True)
