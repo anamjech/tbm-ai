@@ -10,7 +10,7 @@ from email import encoders
 from io import BytesIO
 import requests
 import google.generativeai as genai
-from streamlit_geolocation import streamlit_geolocation
+from streamlit_js_eval import streamlit_js_eval
 from PIL import Image as PilImage
 
 from reportlab.lib.pagesizes import A4
@@ -116,12 +116,22 @@ for row_start in range(0, int(worker_count), 3):
                 worker_names.append(name.strip() or f'작업자{index + 1}')
 
 st.markdown('<div class="section-label"><span>03</span> 작업 환경</div>', unsafe_allow_html=True)
-# 접지 않고 바로 표시합니다. 아래 "Get Current Location" 글자를 누르면 GPS를 불러옵니다.
-st.markdown('📍 **현장 위치 및 날씨 자동 가져오기 (GPS 연동)**')
-loc_data = streamlit_geolocation()
+# 텍스트 링크 자체가 GPS 권한 요청과 위치 조회를 실행합니다.
+gps_link_script = '''
+setFrameHeight(34);
+document.body.innerHTML = `
+  <a id="gps-link" href="#" style="color:#61f6dc;font-family:'Noto Sans KR',sans-serif;
+  font-size:14px;font-weight:700;text-decoration:none;cursor:pointer;">
+  📍 위치 및 날씨 자동 가져오기 <span style="opacity:.68;font-weight:400;">(GPS 연동)</span></a>`;
+document.getElementById('gps-link').addEventListener('click', function(event) {
+  event.preventDefault();
+  getLocation();
+});
+'''
+loc_data = streamlit_js_eval(js_expressions=gps_link_script, key='tbm_gps_link')
 auto_location, auto_weather = '', ''
-if loc_data and loc_data.get('latitude') and loc_data.get('longitude'):
-    lat, lon = loc_data['latitude'], loc_data['longitude']
+if loc_data and loc_data.get('coords'):
+    lat, lon = loc_data['coords']['latitude'], loc_data['coords']['longitude']
     try:
         response = requests.get(f'https://nominatim.openstreetmap.org/reverse?format=json&lat={lat}&lon={lon}&zoom=18', headers={'User-Agent':'TBMStudio/1.0'}, timeout=3).json()
         auto_location = response.get('display_name', f'위도 {lat:.4f}, 경도 {lon:.4f}')
