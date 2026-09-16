@@ -116,10 +116,11 @@ for row_start in range(0, int(worker_count), 3):
                 worker_names.append(name.strip() or f'작업자{index + 1}')
 
 st.markdown('<div class="section-label"><span>03</span> 작업 환경</div>', unsafe_allow_html=True)
-with st.expander('📍 GPS로 현재 위치와 날씨 불러오기', expanded=False):
-    loc_data = streamlit_geolocation()
+# 접지 않고 바로 표시합니다. 아래 "Get Current Location" 글자를 누르면 GPS를 불러옵니다.
+st.markdown('📍 **현장 위치 및 날씨 자동 가져오기 (GPS 연동)**')
+loc_data = streamlit_geolocation()
 auto_location, auto_weather = '', ''
-if 'loc_data' in locals() and loc_data and loc_data.get('latitude') and loc_data.get('longitude'):
+if loc_data and loc_data.get('latitude') and loc_data.get('longitude'):
     lat, lon = loc_data['latitude'], loc_data['longitude']
     try:
         response = requests.get(f'https://nominatim.openstreetmap.org/reverse?format=json&lat={lat}&lon={lon}&zoom=18', headers={'User-Agent':'TBMStudio/1.0'}, timeout=3).json()
@@ -148,7 +149,14 @@ if submitted:
         with st.spinner('AI가 현장 작업을 분석하고 있습니다…'):
             try:
                 genai.configure(api_key=GEMINI_API_KEY)
-                prompt = f'''너는 건설/제조업 안전관리 전문가다. 작업 내용: {work_content}\n정확히 3개의 위험요인을 도출하고, 아래 헤더를 사용한 마크다운 표만 출력하라.\n| 번호 | 위험요인 | 잠재 위험성 (재해형태) | 감소 대책 (안전조치) |'''
+                prompt = f'''
+                너는 베테랑 건설/제조업 안전관리 전문가야. 다음 작업 내용에 대해 산업안전보건기준에 맞추어 위험성평가를 수행해줘.
+                작업 내용: {work_content}
+
+                반드시 정확히 3개의 위험요인을 도출하고, 오직 마크다운 표(Table) 형태로만 출력해줘. 다른 인사말이나 설명은 절대 적지 마.
+                표의 헤더는 정확히 이 순서로 해줘:
+                | 번호 | 위험요인 | 잠재 위험성 (재해형태) | 감소 대책 (안전조치) |
+                '''
                 ai_result_text = genai.GenerativeModel('gemini-3.5-flash-lite').generate_content(prompt).text
             except Exception as error:
                 st.error(f'AI 분석 오류: {error}'); st.stop()
