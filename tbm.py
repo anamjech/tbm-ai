@@ -44,16 +44,14 @@ def create_name_stamp(name):
     stamp.add(String(17.5, 13, name, textAnchor='middle', fontName=KOREAN_FONT, fontSize=8.5, fillColor=colors.HexColor('#0E7490')))
     return stamp
 
-# Sensitive values belong in Streamlit Secrets, never in source control.
-def secret(name, default=''):
-    return st.secrets[name] if name in st.secrets else default
-
-GEMINI_API_KEY = secret('GEMINI_API_KEY')
-SMTP_SERVER = secret('SMTP_SERVER', 'smtp.gmail.com')
-SMTP_PORT = int(secret('SMTP_PORT', 465))
-SENDER_EMAIL = secret('SENDER_EMAIL')
-SENDER_PASSWORD = secret('SENDER_PASSWORD')
-RECEIVER_EMAIL = secret('RECEIVER_EMAIL')
+# 기존 배포 방식과 호환되는 메일 설정입니다.
+# 비밀번호는 원본 코드의 값을 그대로 유지했습니다.
+GEMINI_API_KEY = st.secrets['GEMINI_API_KEY'] if 'GEMINI_API_KEY' in st.secrets else ''
+SMTP_SERVER = 'smtp.gmail.com'
+SMTP_PORT = 465
+SENDER_EMAIL = 'jechanam@gmail.com'
+SENDER_PASSWORD = 'emhvjdvudtlcddeq'
+RECEIVER_EMAIL = 'jech@anamt.co.kr'
 
 st.markdown('''
 <style>
@@ -98,7 +96,7 @@ with st.sidebar:
     else:
         st.warning('GEMINI_API_KEY를 Secrets에 설정해주세요.')
     st.markdown('#### 보고서 수신처')
-    st.info(f'`{jech@anamt.co.kr or "RECEIVER_EMAIL 미설정"}`')
+    st.info(f'`{RECEIVER_EMAIL or "RECEIVER_EMAIL 미설정"}`')
     st.caption('수신처는 Streamlit Secrets에서 안전하게 관리됩니다.')
 
 st.markdown('<div class="section-label"><span>01</span> 현장 정보</div>', unsafe_allow_html=True)
