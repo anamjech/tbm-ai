@@ -42,6 +42,8 @@ def create_name_stamp(name):
     stamp = Drawing(35, 35)
     stamp.add(Circle(17.5, 17.5, 15, strokeColor=colors.HexColor('#0E7490'), fillColor=colors.white, strokeWidth=1.2))
     stamp.add(String(17.5, 13, name, textAnchor='middle', fontName=KOREAN_FONT, fontSize=8.5, fillColor=colors.HexColor('#0E7490')))
+    stamp.add(Circle(17.5, 17.5, 15, strokeColor=colors.HexColor('#DC2626'), fillColor=colors.white, strokeWidth=1.2))
+    stamp.add(String(17.5, 13, name, textAnchor='middle', fontName=KOREAN_FONT, fontSize=8.5, fillColor=colors.HexColor('#DC2626')))
     return stamp
 
 # 기존 배포 방식과 호환되는 메일 설정입니다.
@@ -158,15 +160,20 @@ if submitted:
 
         pdf_buffer, story = BytesIO(), []
         normal = ParagraphStyle('normal', fontName=KOREAN_FONT, fontSize=9, leading=14, textColor=colors.HexColor('#25334A'))
+        normal = ParagraphStyle('normal', fontName=KOREAN_FONT, fontSize=9, leading=14, textColor=colors.HexColor('#334155'))
         header = ParagraphStyle('header', fontName=KOREAN_FONT, fontSize=9, leading=14, textColor=colors.white)
         title = ParagraphStyle('title', fontName=KOREAN_FONT, fontSize=16, alignment=1, textColor=colors.HexColor('#0E7490'), spaceAfter=15)
         h2 = ParagraphStyle('h2', fontName=KOREAN_FONT, fontSize=12, textColor=colors.HexColor('#0E7490'), spaceBefore=10, spaceAfter=8)
+        title = ParagraphStyle('title', fontName=KOREAN_FONT, fontSize=16, alignment=1, textColor=colors.HexColor('#1E3A8A'), spaceAfter=15)
+        h2 = ParagraphStyle('h2', fontName=KOREAN_FONT, fontSize=12, textColor=colors.HexColor('#1E3A8A'), spaceBefore=10, spaceAfter=8)
         story += [Paragraph('TBM (Tool Box Meeting) 및 위험성평가 보고서', title), Spacer(1, 5)]
         meta = [[Paragraph('<b>현장명</b>',normal),Paragraph(site_name,normal),Paragraph('<b>작업 일자</b>',normal),Paragraph(str(tbm_date),normal)], [Paragraph('<b>작업 위치</b>',normal),Paragraph(location,normal),Paragraph('<b>현장 날씨</b>',normal),Paragraph(weather_info or '정보 없음',normal)], [Paragraph('<b>참여 인원</b>',normal),Paragraph(f'{worker_count}명',normal),'',''], [Paragraph('<b>작업 내용</b>',normal),Paragraph(work_content,normal),'','']]
         table = Table(meta, colWidths=[70,190,75,190]); table.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,-1),colors.HexColor('#F0FDFA')),('GRID',(0,0),(-1,-1),.5,colors.HexColor('#B6D9D5')),('SPAN',(1,2),(3,2)),('SPAN',(1,3),(3,3)),('PADDING',(0,0),(-1,-1),5)])); story += [table, Spacer(1,10)]
+        table = Table(meta, colWidths=[70,190,75,190]); table.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,-1),colors.HexColor('#F1F5F9')),('GRID',(0,0),(-1,-1),.5,colors.HexColor('#CBD5E1')),('SPAN',(1,2),(3,2)),('SPAN',(1,3),(3,3)),('PADDING',(0,0),(-1,-1),5)])); story += [table, Spacer(1,10)]
         story += [Paragraph('[참여 작업자 서명부]',h2)]
         workers = [[Paragraph('<b>번호</b>',header),Paragraph('<b>작업자 성명</b>',header),Paragraph('<b>서명 (인)</b>',header)]] + [[Paragraph(str(i+1),normal),Paragraph(n,normal),create_name_stamp(n)] for i,n in enumerate(worker_names)]
         table = Table(workers,colWidths=[50,250,234],rowHeights=28); table.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#0E7490')),('GRID',(0,0),(-1,-1),.5,colors.HexColor('#B6D9D5')),('ALIGN',(2,1),(2,-1),'CENTER')])); story += [table,Spacer(1,10),Paragraph('[AI 안전관리 전문가 분석] 위험성평가 결과',h2)]
+        table = Table(workers,colWidths=[50,250,234],rowHeights=28); table.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#1E3A8A')),('GRID',(0,0),(-1,-1),.5,colors.HexColor('#CBD5E1')),('ALIGN',(2,1),(2,-1),'CENTER')])); story += [table,Spacer(1,10),Paragraph('[AI 안전관리 전문가 분석] 위험성평가 결과',h2)]
         rows = [[Paragraph(f'<b>{x}</b>',header) for x in ['번호','위험요인','잠재 위험성','감소 대책']]]
         for line in ai_result_text.splitlines():
             cells = [c.strip() for c in line.split('|')[1:-1]] if '|' in line and '---' not in line else []
@@ -177,6 +184,19 @@ if submitted:
             try:
                 image = PilImage.open(file); image.thumbnail((800,800)); image.convert('RGB').save(f'temp_{i}.jpg','JPEG',quality=80); story += [Spacer(1,8),RLImage(f'temp_{i}.jpg',width=220,height=140)]
             except Exception: pass
+            table=Table(rows,colWidths=[35,135,145,210]); table.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#1E3A8A')),('GRID',(0,0),(-1,-1),.5,colors.HexColor('#CBD5E1')),('VALIGN',(0,0),(-1,-1),'TOP'),('PADDING',(0,0),(-1,-1),5)])); story.append(table)
+        if uploaded_files:
+            story += [Spacer(1, 10), Paragraph(f'[현장 활동 사진 ({len(uploaded_files)}장)]', h2), Spacer(1, 4)]
+            for i, file in enumerate(uploaded_files):
+                try:
+                    image = PilImage.open(file)
+                    image.thumbnail((800, 800))
+                    if image.mode in ('RGBA', 'P'):
+                        image = image.convert('RGB')
+                    image.save(f'temp_{i}.jpg', 'JPEG', quality=80)
+                    story += [RLImage(f'temp_{i}.jpg', width=220, height=140), Spacer(1, 5)]
+                except Exception as image_error:
+                    story.append(Paragraph(f'(사진 {i + 1} 삽입 생략: {image_error})', normal))
         SimpleDocTemplate(pdf_buffer,pagesize=A4,rightMargin=30,leftMargin=30,topMargin=30,bottomMargin=30).build(story)
         pdf_data=pdf_buffer.getvalue()
         st.download_button('PDF 보고서 다운로드',pdf_data,f'TBM_{site_name}_{tbm_date}.pdf','application/pdf',use_container_width=True)
@@ -184,6 +204,23 @@ if submitted:
             try:
                 msg=MIMEMultipart(); msg['From']=SENDER_EMAIL; msg['To']=RECEIVER_EMAIL; msg['Subject']=f'[TBM 보고서] {site_name} | {tbm_date}'
                 msg.attach(MIMEText(f'{site_name} 현장의 TBM 및 위험성평가 보고서입니다.\\n\\n작업 내용: {work_content}','plain'))
+                msg=MIMEMultipart(); msg['From']=SENDER_EMAIL; msg['To']=RECEIVER_EMAIL; msg['Subject']=f'[TBM 보고서] [{site_name}] {tbm_date} 위험성평가 결과'
+                body = f'''안녕하세요, 안전관리 담당자님.
+
+[{site_name}] 현장의 {tbm_date} TBM 및 위험성평가 보고서가 자동 접수되었습니다.
+
+- 현장명: {site_name}
+- 작업 일자: {tbm_date}
+- 작업 위치: {location}
+- 현장 날씨: {weather_info}
+- 참여 인원: {worker_count}명 ({', '.join(worker_names)})
+- 작업 내용: {work_content}
+
+첨부된 PDF 파일을 확인해 주시기 바랍니다.
+
+- 스마트 TBM 자동화 시스템 -
+'''
+                msg.attach(MIMEText(body, 'plain'))
                 part=MIMEBase('application','octet-stream'); part.set_payload(pdf_data); encoders.encode_base64(part); part.add_header('Content-Disposition','attachment',filename=Header(f'TBM_{site_name}_{tbm_date}.pdf','utf-8').encode()); msg.attach(part)
                 server=smtplib.SMTP_SSL(SMTP_SERVER,SMTP_PORT,timeout=10); server.login(SENDER_EMAIL,SENDER_PASSWORD); server.sendmail(SENDER_EMAIL,RECEIVER_EMAIL,msg.as_string()); server.quit()
                 st.success('보고서가 안전관리자 메일함으로 전송되었습니다.')
