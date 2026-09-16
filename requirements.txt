@@ -3,3 +3,4 @@ google-generativeai
 reportlab
 requests
 streamlit-geolocation
+streamlit-js-eval
