@@ -98,7 +98,7 @@ with st.sidebar:
     else:
         st.warning('GEMINI_API_KEY를 Secrets에 설정해주세요.')
     st.markdown('#### 보고서 수신처')
-    st.info(f'`{RECEIVER_EMAIL or "RECEIVER_EMAIL 미설정"}`')
+    st.info(f'`{jech@anamt.co.kr or "RECEIVER_EMAIL 미설정"}`')
     st.caption('수신처는 Streamlit Secrets에서 안전하게 관리됩니다.')
 
 st.markdown('<div class="section-label"><span>01</span> 현장 정보</div>', unsafe_allow_html=True)
